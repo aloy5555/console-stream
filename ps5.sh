@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script will set up Docker, install dependencies, and create all necessary files to handle PS5 controller input.
+# This script will automatically detect the video capture card, set up the Docker, and configure everything to handle PS5 controller input and video capture streaming.
 
 # Step 1: Update and Install Docker
 echo "Installing Docker if not already installed..."
@@ -26,29 +26,51 @@ else
   echo "Docker Compose is already installed."
 fi
 
-# Step 3: Get user input for username and password
+# Step 3: Install FFmpeg to handle video capture from the capture card
+echo "Installing FFmpeg..."
+sudo apt-get install -y ffmpeg
+
+# Step 4: Detect available capture devices
+echo "Detecting video capture devices..."
+CAPTURE_DEVICE=""
+for device in /dev/video*; do
+  if [ -e "$device" ]; then
+    CAPTURE_DEVICE=$device
+    break
+  fi
+done
+
+if [ -z "$CAPTURE_DEVICE" ]; then
+  echo "No video capture device found. Exiting..."
+  exit 1
+else
+  echo "Found video capture device: $CAPTURE_DEVICE"
+fi
+
+# Step 5: Get user input for username and password
 echo "Please enter the username for basic authentication:"
 read USER_NAME
 
 echo "Please enter the password for basic authentication:"
 read -s PASSWORD
 
-# Step 4: Create project directory
+# Step 6: Create project directory
 PROJECT_DIR="$HOME/ps5-stream"
 echo "Creating project directory at $PROJECT_DIR"
 mkdir -p $PROJECT_DIR
 cd $PROJECT_DIR
 
-# Step 5: Initialize Node.js Project and Install Dependencies
+# Step 7: Initialize Node.js Project and Install Dependencies
 echo "Initializing Node.js project..."
 npm init -y
 npm install express express-basic-auth
 
-# Step 6: Create `server.js` file for the Express server
+# Step 8: Create `server.js` file for the Express server with Video Stream and Controller Input
 echo "Creating server.js..."
 cat <<EOL > server.js
 const express = require('express');
 const basicAuth = require('express-basic-auth');
+const { spawn } = require('child_process');
 
 const app = express();
 const port = 3000;
@@ -59,13 +81,27 @@ app.use(basicAuth({
   challenge: true,
 }));
 
-// Serve the video stream or other functionality here
-app.get('/', (req, res) => {
-  res.send('PS5 Stream will be here!');
+// Serve the video stream from the capture card (using FFmpeg)
+app.get('/video', (req, res) => {
+  // Stream video from the capture card via FFmpeg
+  const ffmpeg = spawn('ffmpeg', [
+    '-f', 'v4l2',
+    '-i', '$CAPTURE_DEVICE',  # Use the detected capture device
+    '-f', 'mjpeg',
+    '-q:v', '5',
+    'http://localhost:8081'
+  ]);
+
+  // Pipe the output to the response stream
+  ffmpeg.stdout.pipe(res);
+
+  ffmpeg.on('close', () => {
+    console.log('FFmpeg process ended');
+  });
 });
 
 // Handle incoming controller input data
-app.post('/controller-input', (req, res) => {
+app.post('/controller-input', express.json(), (req, res) => {
   const input = req.body.input;
   console.log('Received controller input:', input);
 
@@ -79,21 +115,21 @@ app.listen(port, () => {
 });
 EOL
 
-# Step 7: Create HTML file to handle the controller input (Gamepad API)
-echo "Creating HTML file to handle controller input..."
+# Step 9: Create HTML file to handle the controller input and display video
+echo "Creating HTML file to handle controller input and video stream..."
 cat <<EOL > index.html
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PS5 Controller Input</title>
+    <title>PS5 Controller Input & Video Stream</title>
 </head>
 <body>
-    <h1>PS5 Controller Input</h1>
-    <p>Press buttons on your controller!</p>
+    <h1>PS5 Controller Input & Video Stream</h1>
+    <video id="videoStream" width="640" height="360" controls autoplay></video>
     <script>
-        // Function to check the controller input
+        // Function to update the controller input
         function updateController() {
             const gamepads = navigator.getGamepads();
 
@@ -138,20 +174,32 @@ cat <<EOL > index.html
             .catch(error => console.error('Error sending data to server:', error));
         }
 
+        // Set up video stream element
+        function startVideoStream() {
+            const video = document.getElementById('videoStream');
+            video.src = "http://localhost:8081"; // Stream from FFmpeg server
+        }
+
         window.addEventListener('gamepadconnected', () => {
             console.log('Controller connected');
             updateController();
         });
+
+        // Start video stream when the page loads
+        window.onload = startVideoStream;
     </script>
 </body>
 </html>
 EOL
 
-# Step 8: Create Dockerfile to containerize the application
+# Step 10: Create Dockerfile to containerize the application
 echo "Creating Dockerfile..."
 cat <<EOL > Dockerfile
 # Use Node.js official image
 FROM node:16
+
+# Install FFmpeg in the container
+RUN apt-get update && apt-get install -y ffmpeg
 
 # Set working directory inside container
 WORKDIR /usr/src/app
@@ -165,14 +213,15 @@ RUN npm install
 # Copy the rest of the application code
 COPY . .
 
-# Expose the port the app will run on
+# Expose the necessary ports
 EXPOSE 3000
+EXPOSE 8081
 
 # Run the app
 CMD ["node", "server.js"]
 EOL
 
-# Step 9: Create docker-compose.yml file to run the app in a container
+# Step 11: Create docker-compose.yml file to run the app in a container
 echo "Creating docker-compose.yml..."
 cat <<EOL > docker-compose.yml
 version: '3'
@@ -182,15 +231,16 @@ services:
     build: .
     ports:
       - "3000:3000"
+      - "8081:8081"  # Expose port for video stream
     environment:
       - USER_NAME=$USER_NAME
       - PASSWORD=$PASSWORD
     restart: always
 EOL
 
-# Step 10: Build and run Docker container
+# Step 12: Build and run Docker container
 echo "Building and running Docker container..."
 sudo docker-compose up --build -d
 
-# Step 11: Output the result
+# Step 13: Output the result
 echo "Docker container is up and running. You can access your app at http://localhost:3000"
