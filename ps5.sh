@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# This script will automatically detect the video capture card, set up the Docker, and configure everything to handle PS5 controller input and video capture streaming.
+# This script will automatically set up everything: Install Docker, FFmpeg, Node.js, create the website, set up the ESP32, and simulate PS4 controller input.
 
 # Step 1: Update and Install Docker
 echo "Installing Docker if not already installed..."
@@ -30,69 +30,44 @@ fi
 echo "Installing FFmpeg..."
 sudo apt-get install -y ffmpeg
 
-# Step 4: Detect available capture devices
-echo "Detecting video capture devices..."
-CAPTURE_DEVICE=""
-for device in /dev/video*; do
-  if [ -e "$device" ]; then
-    CAPTURE_DEVICE=$device
-    break
-  fi
-done
-
-if [ -z "$CAPTURE_DEVICE" ]; then
-  echo "No video capture device found. Exiting..."
-  exit 1
-else
-  echo "Found video capture device: $CAPTURE_DEVICE"
-fi
-
-# Step 5: Get user input for username and password
-echo "Please enter the username for basic authentication:"
-read USER_NAME
-
-echo "Please enter the password for basic authentication:"
-read -s PASSWORD
-
-# Step 6: Create project directory
+# Step 4: Create project directory for your application
 PROJECT_DIR="$HOME/ps5-stream"
 echo "Creating project directory at $PROJECT_DIR"
 mkdir -p $PROJECT_DIR
 cd $PROJECT_DIR
 
-# Step 7: Initialize Node.js Project and Install Dependencies
+# Step 5: Initialize Node.js Project and Install Dependencies
 echo "Initializing Node.js project..."
 npm init -y
 npm install express express-basic-auth
 
-# Step 8: Create `server.js` file for the Express server with Video Stream and Controller Input
+# Step 6: Create `server.js` file for the Express server with Video Stream and Controller Input
 echo "Creating server.js..."
 cat <<EOL > server.js
 const express = require('express');
 const basicAuth = require('express-basic-auth');
 const { spawn } = require('child_process');
+const fetch = require('node-fetch');
 
 const app = express();
 const port = 3000;
 
 // Basic Auth
 app.use(basicAuth({
-  users: { '$USER_NAME': '$PASSWORD' },
+  users: { 'user': 'password' },
   challenge: true,
 }));
 
 // Serve the video stream from the capture card (using FFmpeg)
 app.get('/video', (req, res) => {
-  // Stream video from the capture card via FFmpeg
   const ffmpeg = spawn('ffmpeg', [
     '-f', 'v4l2',
-    '-i', '$CAPTURE_DEVICE',  # Use the detected capture device
+    '-i', '/dev/video0',
     '-f', 'mjpeg',
     '-q:v', '5',
     'http://localhost:8081'
   ]);
 
-  // Pipe the output to the response stream
   ffmpeg.stdout.pipe(res);
 
   ffmpeg.on('close', () => {
@@ -105,8 +80,18 @@ app.post('/controller-input', express.json(), (req, res) => {
   const input = req.body.input;
   console.log('Received controller input:', input);
 
-  // Process the input here (e.g., use it for streaming control, game actions, etc.)
-  
+  // Send data to ESP32
+  fetch('http://esp32.local/input', {  // Replace with ESP32's IP address or mDNS name
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ input: input }),
+  })
+  .then(response => response.json())
+  .then(data => console.log('ESP32 received:', data))
+  .catch(error => console.error('Error sending data to ESP32:', error));
+
   res.json({ status: 'success', received: input });
 });
 
@@ -115,7 +100,7 @@ app.listen(port, () => {
 });
 EOL
 
-# Step 9: Create HTML file to handle the controller input and display video
+# Step 7: Create HTML file to handle the controller input and display video
 echo "Creating HTML file to handle controller input and video stream..."
 cat <<EOL > index.html
 <!DOCTYPE html>
@@ -192,7 +177,7 @@ cat <<EOL > index.html
 </html>
 EOL
 
-# Step 10: Create Dockerfile to containerize the application
+# Step 8: Create Dockerfile to containerize the application
 echo "Creating Dockerfile..."
 cat <<EOL > Dockerfile
 # Use Node.js official image
@@ -221,7 +206,7 @@ EXPOSE 8081
 CMD ["node", "server.js"]
 EOL
 
-# Step 11: Create docker-compose.yml file to run the app in a container
+# Step 9: Create docker-compose.yml file to run the app in a container
 echo "Creating docker-compose.yml..."
 cat <<EOL > docker-compose.yml
 version: '3'
@@ -232,15 +217,83 @@ services:
     ports:
       - "3000:3000"
       - "8081:8081"  # Expose port for video stream
-    environment:
-      - USER_NAME=$USER_NAME
-      - PASSWORD=$PASSWORD
     restart: always
 EOL
 
-# Step 12: Build and run Docker container
+# Step 10: Install ESP32 libraries and program the ESP32
+echo "Programming the ESP32..."
+cat <<EOL > setup_esp32_controller.ino
+#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <ESP32_BLE_Gamepad.h>
+
+// Replace with your network credentials
+const char *ssid = "yourSSID";
+const char *password = "yourPassword";
+
+// Create an AsyncWebServer object
+AsyncWebServer server(80);
+
+// Initialize the gamepad
+BLEGamepad bleGamepad;
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+
+  // Initialize BLE Gamepad
+  BLEDevice::init("ESP32_PS4_Controller");
+  BLEServer *pServer = BLEDevice::createServer();
+  bleGamepad.begin();
+
+  // Handle HTTP POST requests to simulate button press
+  server.on("/input", HTTP_POST, [](AsyncWebServerRequest *request) {
+    String input = "";
+    if (request->hasParam("input", true)) {
+      input = request->getParam("input", true)->value();
+    }
+
+    // Simulate button presses or joystick movements based on the input
+    if (input == "Button 0 pressed") {
+      bleGamepad.press(0);
+    } else if (input == "Button 0 released") {
+      bleGamepad.release(0);
+    }
+
+    // Handle joystick movements
+    if (input.startsWith("Left Stick X:")) {
+      int xValue = input.substring(14).toInt();
+      bleGamepad.setXAxis(xValue);
+    }
+    if (input.startsWith("Left Stick Y:")) {
+      int yValue = input.substring(14).toInt();
+      bleGamepad.setYAxis(yValue);
+    }
+
+    // Send response back
+    request->send(200, "application/json", "{\"status\":\"success\"}");
+  });
+
+  // Start the server
+  server.begin();
+}
+
+void loop() {
+  // The loop can stay empty if using HTTP requests for interaction
+}
+EOL
+
+# Step 11: Build and run Docker container for your web app
 echo "Building and running Docker container..."
 sudo docker-compose up --build -d
 
-# Step 13: Output the result
+# Step 12: Output the result
 echo "Docker container is up and running. You can access your app at http://localhost:3000"
+echo "Ensure ESP32 is programmed to send controller input and pair it with PS5 via Bluetooth."
