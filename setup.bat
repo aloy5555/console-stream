@@ -55,10 +55,10 @@ pip install inputs requests
 
 REM -------- DOWNLOAD CONTROLLER SENDER SCRIPT --------
 set SCRIPT_DIR=%~dp0
-set DEMO_SCRIPT=%SCRIPT_DIR%controller_to_gp2040ce.py
+set DEMO_SCRIPT=%SCRIPT_DIR%controller.py
 
 REM Download always-latest version; replace with your own repo if you fork/customize
-powershell -Command "Invoke-WebRequest -Uri https://raw.githubusercontent.com/aloy5555/tools-public/main/controller_to_gp2040ce.py -OutFile '%DEMO_SCRIPT%'"
+powershell -Command "Invoke-WebRequest -Uri https://raw.githubusercontent.com/aloy5555/tools-public/main/controller.py -OutFile '%DEMO_SCRIPT%'"
 
 REM -------- PATCH PICO IP AND CONSOLE MODE IN SCRIPT --------
 powershell -Command "(Get-Content '%DEMO_SCRIPT%') -replace \"PICO_IP = '.*'\", \"PICO_IP = '%PICO_IP%'\" | Set-Content '%DEMO_SCRIPT%'"
