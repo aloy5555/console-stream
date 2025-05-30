@@ -1,7 +1,7 @@
-# GP2040-CE Remote Play Automation for Switch, PS4, and PS5
+# console-stream
 
-This project provides a **fully automated remote play setup** for Nintendo Switch, PlayStation 4, and PlayStation 5 using a Raspberry Pi Pico running [GP2040-CE](https://gp2040-ce.info/), an HDMI capture card, and open-source streaming tools (Sunshine + Moonlight).  
-With these scripts, you can stream your console to any device, and send controller input from anywhere back to your console—no special hardware mods required!
+**console-stream** is a fully automated remote play framework for Nintendo Switch, PlayStation 4, and PlayStation 5 using a Raspberry Pi Pico running [GP2040-CE](https://gp2040-ce.info/), an HDMI capture card, and open-source streaming tools (Sunshine + Moonlight).  
+With these scripts, you can stream your console to any device and send controller input from anywhere back to your console—no special hardware mods required!
 
 ---
 
@@ -58,11 +58,11 @@ With these scripts, you can stream your console to any device, and send controll
   ```
 - [Download](https://www.gyan.dev/ffmpeg/builds/) and add ffplay to your PATH.
 
-### 4. Clone this repository
+### 4. Clone this Repository
 
 ```sh
-git clone https://github.com/YOUR_USERNAME/gp2040ce-remote-play-automation.git
-cd gp2040ce-remote-play-automation
+git clone https://github.com/aloy5555/console-stream.git
+cd console-stream
 ```
 
 ### 5. Edit the Batch File
@@ -100,25 +100,16 @@ cd gp2040ce-remote-play-automation
 
 ---
 
-## Troubleshooting
+## Licensing
 
-- **No controller input:**  
-  - Ensure ViGEmBus is installed and “Virtual Gamepad” is enabled in Moonlight.
-  - Double-check Pico IP and that the Pico is running the correct GP2040-CE firmware.
-- **No video:**  
-  - Test your capture card with ffplay or OBS directly.
-  - Verify the device name matches in the batch file and Sunshine app.
-- **Pico not detected:**  
-  - Check cable and USB port, try a different port.
+This project is licensed under a **custom Non-Commercial, Attribution-Required License**.
 
----
+**Key points:**
+- No commercial use allowed.
+- If you use any part of this project in your own code or in a public project, you must provide clear attribution and a link to this repository.
+- For commercial use, contact the author.
 
-## Customization
-
-- **Add more consoles:**  
-  - Edit `controller_to_gp2040ce.py` and add mappings for other GP2040-CE-supported consoles.
-- **Linux support:**  
-  - Scripts can be adapted for Linux with minor changes.
+See [LICENSE](LICENSE) for the full license text.
 
 ---
 
@@ -127,12 +118,6 @@ cd gp2040ce-remote-play-automation
 - [GP2040-CE](https://gp2040-ce.info/) by the OpenStickCommunity
 - [Sunshine](https://sunshineapp.dev/) and [Moonlight](https://moonlight-stream.org/)
 - [ViGEmBus](https://vigembus.github.io/)
-
----
-
-## License
-
-MIT License
 
 ---
 
