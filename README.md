@@ -1,4 +1,4 @@
-![console-stream](console-stream.jpg)
+![console-stream]                                         (console-stream.jpg)
 # console-stream
 
 **console-stream** is a fully automated remote play framework for Nintendo Switch, PlayStation 4, and PlayStation 5 using a Raspberry Pi Pico running [GP2040-CE](https://gp2040-ce.info/), an HDMI capture card, and open-source streaming tools (Sunshine + Moonlight).  
